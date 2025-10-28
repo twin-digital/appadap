@@ -1,0 +1,34 @@
+name: 'Setup Node & Install Dependencies'
+description: |
+  Checkout, setup pnpm & Node, install dependencies, and optionally setup Playwright.
+runs:
+  using: composite
+  steps:
+    - name: Get Playwright version
+      id: playwright-version
+      run: echo "version=$(pnpm list @playwright/test --depth=0 --json | jq -r '.[0].devDependencies["@playwright/test"].version')" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Cache Playwright browsers
+      uses: actions/cache@v4
+      id: playwright-cache
+      with:
+        path: |
+          .playwright-browsers
+        key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+        restore-keys: |
+          ${{ runner.os }}-playwright-
+
+    - name: Install Playwright browsers and system dependencies
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
+      run: pnpm exec playwright install --with-deps
+      shell: bash
+      env:
+        PLAYWRIGHT_BROWSERS_PATH: .playwright-browsers
+
+    - name: Install Playwright system dependencies only
+      if: steps.playwright-cache.outputs.cache-hit == 'true'
+      run: pnpm exec playwright install-deps
+      shell: bash
+      env:
+        PLAYWRIGHT_BROWSERS_PATH: .playwright-browsers
