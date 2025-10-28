@@ -6,7 +6,7 @@ downloads to speed up subsequent builds.
 ## Usage
 
 ```yaml
-    - uses: twin-digital/appadap/actions/install-playwright@v1
+      - uses: twin-digital/appadap/actions/install-playwright@v1
 ```
 
 ## Prerequisites
