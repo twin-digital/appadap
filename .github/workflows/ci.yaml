@@ -30,6 +30,7 @@ env:
   CI: 1
   HUSKY: 0
   PLAYWRIGHT_BROWSERS_PATH: .playwright-browsers
+  PLAYWRIGHT_WORKERS: 6
   VERCEL_TELEMETRY_DISABLED: 1
 
 concurrency:
@@ -257,7 +258,7 @@ jobs:
 
   e2e:
     needs: [prepare_e2e, validate, detect_build_type, build]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, large]
     # Run if E2E is enabled; build job might be skipped but that's OK
     if: |
       needs.prepare_e2e.outputs.run_e2e == 'true' &&
