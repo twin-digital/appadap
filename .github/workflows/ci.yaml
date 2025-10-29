@@ -42,6 +42,10 @@ on:
         default: 'auto'
         description: "'true' | 'false' | 'auto' (default)"
         type: string
+    secrets:
+      VERCEL_TOKEN:
+        required: false
+        description: "Required for 'vercel' build type"
 
 permissions:
   contents: read
@@ -116,6 +120,36 @@ jobs:
       # install node, pnpm, and package dependencies
       - name: Setup pnpm and install dependencies
         uses: ./actions/install-dependencies
+
+      # Validate required secrets for build type
+      - name: Validate required secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          build_type="${{ needs.detect_build_type.outputs.build_type }}"
+
+          echo "Validating secrets for build type: $build_type"
+
+          case "$build_type" in
+            vercel)
+              if [[ -z "$VERCEL_TOKEN" ]]; then
+                echo "::error::Build type 'vercel' requires VERCEL_TOKEN secret to be configured"
+                exit 1
+              fi
+              echo "✅ VERCEL_TOKEN is configured"
+              ;;
+              
+            nextjs|skip)
+              echo "✅ No secrets required for build type: $build_type"
+              ;;
+              
+            *)
+              echo "::error::Unknown build type: $build_type"
+              exit 1
+              ;;
+          esac
 
       # Build based on detected type using inline script
       - name: Build application

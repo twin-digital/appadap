@@ -15,6 +15,14 @@ A comprehensive CI workflow that runs linting, building, unit tests, and optiona
 | `e2e_script`       | `string` | `"test:e2e"`  | The npm script name to execute for E2E tests                                           |
 | `run_e2e`          | `string` | `"auto"`      | Controls E2E test execution. Values: `'true'`, `'false'`, or `'auto'` (default)        |
 
+### Secrets
+
+| Secret         | Required | Description                                               |
+| -------------- | -------- | --------------------------------------------------------- |
+| `VERCEL_TOKEN` | No       | Required when `build_type` is `'vercel'` (auto or manual) |
+
+**Note:** The workflow validates that required secrets are present based on the detected build type and will fail early with a clear error message if a required secret is missing.
+
 ### Build Type Auto-Detection
 
 The workflow supports multiple build systems through the `build_type` input:
@@ -95,6 +103,7 @@ on:
 jobs:
   ci:
     uses: twin-digital/appadap/.github/workflows/ci.yaml@v0
+    secrets: inherit # Pass all secrets to the workflow
     with:
       validate_scripts: 'lint,test' # optional, this is the default
       build_type: 'auto' # optional, this is the default
@@ -108,11 +117,24 @@ jobs:
 jobs:
   ci:
     uses: twin-digital/appadap/.github/workflows/ci.yaml@v0
+    secrets: inherit
     with:
       validate_scripts: 'lint,test,typecheck,db:generate-client'
       build_type: 'vercel'
       e2e_script: 'test:e2e:ci'
       run_e2e: 'true'
+```
+
+**Explicit secrets (if you don't want to use `secrets: inherit`):**
+
+```yaml
+jobs:
+  ci:
+    uses: twin-digital/appadap/.github/workflows/ci.yaml@v0
+    secrets:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    with:
+      build_type: 'vercel'
 ```
 
 **Backend-only project (no build needed):**
