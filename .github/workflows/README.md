@@ -2,6 +2,8 @@
 
 The `appadap` project provides several opinionated workflows which can be reused by other projects.
 
+> **Note:** This repository uses its own reusable workflows for CI. See `ci-self.yaml` for a practical example of how to configure and use the `ci.yaml` workflow in your own projects.
+
 ## CI
 
 A comprehensive CI workflow that runs linting, building, unit tests, and optionally end-to-end (E2E) tests for your project.
