@@ -1,5 +1,11 @@
 # @twin-digital/appadap
 
+## 0.4.1
+
+### Patch Changes
+
+- 0fe1c3c: update action references to be absolute
+
 ## 0.4.0
 
 ### Minor Changes
