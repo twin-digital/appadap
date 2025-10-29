@@ -1,8 +1,8 @@
 # promote-vercel-build
 
-This action finds a staged production Vercel deployment by commit SHA and promotes it to the live production domain. It 
-resolves git refs to commits, validates CI status, finds the exact deployment using Vercel's API, and promotes it using 
-the official Vercel promotion system.
+This is an opinionated action for promoting Vercel deployments to production. It finds a staged production Vercel deployment by commit SHA and promotes it to the live production domain. The action resolves git refs to commits, validates CI status, finds the exact deployment using Vercel's API, and promotes it using the official Vercel promotion system.
+
+**Note:** This action is designed for a deployment workflow where production builds are staged first, tested, and then explicitly promoted.
 
 ## Usage
 
@@ -40,8 +40,10 @@ the official Vercel promotion system.
 
 ## Prerequisites
 
+This action expects a specific deployment workflow:
+
 - Vercel deployments must be tagged with `--meta commitSha=<SHA>` during deployment
-- The target commit must have a successful CI workflow run
+- The target commit must have a successful CI workflow run (named `ci.yaml` by default)
 - Only one production deployment should exist per commit SHA
 - GitHub CLI (`gh`) must be available for API access
 - Vercel CLI (`vercel`) must be installed

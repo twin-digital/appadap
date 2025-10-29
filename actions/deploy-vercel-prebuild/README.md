@@ -1,6 +1,8 @@
 # deploy-vercel-prebuild
 
-This action handles the complete deployment workflow for Vercel applications with GitHub integration. It downloads prebuilt artifacts, configures environment variables, runs database migrations, deploys to Vercel, and manages GitHub deployment status with automatic PR comments for preview deployments.
+This is an opinionated, batteries-included deployment action for Vercel applications. It handles the complete deployment workflow including downloading prebuilt artifacts, configuring environment variables, running database migrations, deploying to Vercel, and managing GitHub deployment status with automatic PR comments for preview deployments.
+
+**Note:** This action is designed for projects following a standardized deployment pipeline with pnpm, Prisma migrations, and specific artifact conventions.
 
 ## Usage
 
@@ -38,10 +40,12 @@ This action handles the complete deployment workflow for Vercel applications wit
 
 ## Prerequisites
 
-- The specified artifact must exist and contain a valid Vercel prebuild
+This action expects a standardized project setup:
+
+- The specified artifact must exist and contain a valid Vercel prebuild (`.out/next-build.tgz` with `.next/` directory)
 - Node.js and pnpm must be available in the runner environment
 - Vercel CLI must be available (via `npx vercel`)
-- Database migration scripts must be available via `pnpm run db:migrate`
+- Project must have a `db:migrate` script that runs database migrations (typically Prisma)
 - GitHub token with repo permissions (automatically provided in Actions)
 
 ## Inputs
