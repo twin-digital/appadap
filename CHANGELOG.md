@@ -1,5 +1,11 @@
 # @twin-digital/appadap
 
+## 0.1.3
+
+### Patch Changes
+
+- 0ae8c3c: publish major & minor version alias tags
+
 ## 0.1.2
 
 ### Patch Changes
