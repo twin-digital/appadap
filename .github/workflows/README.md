@@ -159,8 +159,8 @@ The workflow consists of six jobs:
 2. **`prepare_validation`** - Parses the comma-delimited `validate_scripts` input into a JSON array for the matrix strategy
 3. **`validate`** - Runs validation scripts in parallel using a matrix strategy. Each script specified in `validate_scripts` runs as a separate job instance.
 4. **`build`** - Builds the application based on the detected build type. Runs in parallel with `validate` to minimize pipeline duration. Skipped entirely if `build_type` is `'skip'`.
-5. **`evaluate`** - Determines whether E2E tests should run based on inputs and auto-detection
-6. **`e2e`** - Conditionally runs E2E tests if enabled (depends on `validate`, `build`, `detect_build_type`, and `evaluate` completing). Automatically downloads and restores build artifacts if applicable. Installs Playwright and Docker, and uploads test results.
+5. **`prepare_e2e`** - Determines whether E2E tests should run based on inputs and auto-detection
+6. **`e2e`** - Conditionally runs E2E tests if enabled (depends on `prepare_e2e`, `validate`, `build`, and `detect_build_type` completing). Automatically downloads and restores build artifacts if applicable. Installs Playwright and Docker, and uploads test results.
 
 ### Artifacts
 

@@ -212,7 +212,7 @@ jobs:
 
   # evaluate "auto-detect" inputs:
   #  - Set run_e2e if 'auto' and project has an package.json script named {{ e2e_script }}
-  evaluate:
+  prepare_e2e:
     runs-on: ubuntu-latest
     outputs:
       run_e2e: ${{ steps.decide.outputs.run_e2e_final }}
@@ -256,11 +256,11 @@ jobs:
           echo "Decision: run_e2e=$final"
 
   e2e:
-    needs: [evaluate, validate, detect_build_type, build]
+    needs: [prepare_e2e, validate, detect_build_type, build]
     runs-on: ubuntu-latest
     # Run if E2E is enabled; build job might be skipped but that's OK
     if: |
-      needs.evaluate.outputs.run_e2e == 'true' &&
+      needs.prepare_e2e.outputs.run_e2e == 'true' &&
       !cancelled()
     steps:
       - uses: actions/checkout@v4
@@ -269,7 +269,7 @@ jobs:
       - name: Validate E2E script exists
         shell: bash
         env:
-          SCRIPT_NAME: ${{ needs.evaluate.outputs.e2e_script }}
+          SCRIPT_NAME: ${{ needs.prepare_e2e.outputs.e2e_script }}
         run: |
           set -euo pipefail
 
@@ -329,7 +329,7 @@ jobs:
 
       # invoke E2E tests and upload results as an artifact
       - name: Run E2E
-        run: pnpm run "${{ needs.evaluate.outputs.e2e_script }}"
+        run: pnpm run "${{ needs.prepare_e2e.outputs.e2e_script }}"
       - uses: actions/upload-artifact@v5
         if: ${{ !cancelled() }}
         with:
