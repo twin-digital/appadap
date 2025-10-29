@@ -1,5 +1,11 @@
 # @twin-digital/appadap
 
+## 0.4.0
+
+### Minor Changes
+
+- 98a37bd: BREAKING: update expected artifact name for deploy-vercel-prebuild to "build-output"
+
 ## 0.3.0
 
 ### Minor Changes
