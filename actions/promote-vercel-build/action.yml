@@ -1,0 +1,157 @@
+name: 'Promote Vercel Build'
+description: 'Find a Vercel deployment and promote it to production by aliasing to the production domain'
+
+inputs:
+  ref:
+    description: 'Git ref of the build to promote (defaults to main)'
+    required: false
+    default: 'main'
+  vercel-token:
+    description: 'Vercel API token'
+    required: true
+  vercel-project-id:
+    description: 'Vercel project ID'
+    required: true
+  vercel-scope:
+    description: 'Vercel scope (team or personal) passed to the CLI as --scope'
+    required: true
+  ci-workflow-file:
+    description: 'Workflow file used to verify CI success (e.g., ci.yaml)'
+    required: false
+    default: 'ci.yaml'
+  debug:
+    description: 'Enable verbose debug logging'
+    required: false
+    default: 'false'
+
+outputs:
+  ref:
+    description: 'Git ref of the promoted build'
+    value: ${{ steps.find-deployment.outputs.ref }}
+  commit-sha:
+    description: 'Commit SHA of the promoted build'
+    value: ${{ steps.find-deployment.outputs.commit-sha }}
+  preview-url:
+    description: 'Original deployment URL of the promoted build'
+    value: ${{ steps.find-deployment.outputs.preview-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Find deployment to promote
+      id: find-deployment
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::add-mask::${{ inputs.vercel-token }}"
+        
+        [[ "${{ inputs.debug }}" == "true" ]] && echo "Finding deployment to promote..."
+
+        REF="${{ inputs.ref }}"
+        if ! [[ "$REF" =~ ^[A-Za-z0-9._/\-]+$ || "$REF" =~ ^[a-f0-9]{40}$ ]]; then
+          echo "Error: invalid ref format"
+          exit 1
+        fi
+        [[ "${{ inputs.debug }}" == "true" ]] && echo "Using ref: $REF"
+
+        # Resolve REF robustly (prefer git if available, fallback to gh):
+        if command -v git >/dev/null 2>&1; then
+          COMMIT_SHA=$(git rev-parse "${{ inputs.ref }}" 2>/dev/null || true)
+        else
+          # URL-encode the ref for the gh path segment
+          ENCODED_REF=$(jq -rn --arg v "${{ inputs.ref }}" '$v|@uri')
+          COMMIT_SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/${ENCODED_REF}" --jq '.object.sha' 2>/dev/null || \
+                      gh api "repos/${{ github.repository }}/git/ref/tags/${ENCODED_REF}"  --jq '.object.sha' 2>/dev/null || \
+                      echo "${{ inputs.ref }}")
+        fi
+
+        if [[ ! "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+          echo "Error: Could not resolve '$REF' to a valid commit SHA"
+          exit 1
+        fi
+
+        [[ "${{ inputs.debug }}" == "true" ]] && echo "Resolved to commit SHA: $COMMIT_SHA"
+
+        echo "ref=$REF" >> "$GITHUB_OUTPUT"
+        echo "commit-sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+
+        # Confirm the SHA had a passing CI workflow
+        WORKFLOW_FILE="${{ inputs.ci-workflow-file }}"
+        [[ "${{ inputs.debug }}" == "true" ]] && echo "Checking CI status for commit: $COMMIT_SHA using workflow: $WORKFLOW_FILE"
+        CI_STATUS=$(gh api repos/${{ github.repository }}/actions/workflows/"$WORKFLOW_FILE"/runs \
+          --jq ".workflow_runs[] | select(.head_sha == \"$COMMIT_SHA\") | .conclusion" \
+          | head -n 1 || true)
+
+        if [[ "${CI_STATUS:-}" != "success" ]]; then
+          echo "Error: Commit $COMMIT_SHA does not have a successful CI workflow (status: ${CI_STATUS:-unknown})"
+          exit 1
+        fi
+        [[ "${{ inputs.debug }}" == "true" ]] && echo "✅ CI workflow passed for commit: $COMMIT_SHA"
+
+        # Resolve Vercel project
+        PROJECT_ID="${{ inputs.vercel-project-id }}"
+        if [[ -z "${PROJECT_ID}" ]]; then
+          echo "Error: 'vercel-project-id' must be provided."
+          exit 1
+        fi
+
+        # Get deployments for the project filtered by commit SHA and production target
+        [[ "${{ inputs.debug }}" == "true" ]] && echo "Finding Vercel production deployment with commitSha=$COMMIT_SHA..."
+        DEPLOYMENTS=$(curl -s -H "Authorization: Bearer ${{ inputs.vercel-token }}" \
+          "https://api.vercel.com/v6/deployments?projectId=$PROJECT_ID&limit=2&target=production&sha=$COMMIT_SHA")
+
+        DEPLOYMENT_COUNT=$(echo "$DEPLOYMENTS" | jq '.deployments | length')
+
+        if [[ "$DEPLOYMENT_COUNT" -eq 0 ]]; then
+          echo "Error: No production deployments found for the specified commit."
+          if [[ "${{ inputs.debug }}" == "true" ]]; then
+            echo "Debug: Showing recent deployments for this project..."
+            ALL_DEPLOYMENTS=$(curl -s -H "Authorization: Bearer ${{ inputs.vercel-token }}" \
+              "https://api.vercel.com/v6/deployments?projectId=$PROJECT_ID&limit=10")
+            echo "$ALL_DEPLOYMENTS" | jq -r '.deployments[] | "- \(.url) (commit: \(.meta.githubCommitSha // "unknown"), target: \(.target), state: \(.state))"'
+          fi
+          exit 1
+        elif [[ "$DEPLOYMENT_COUNT" -gt 1 ]]; then
+          echo "Error: Multiple production deployments found for the specified commit."
+          if [[ "${{ inputs.debug }}" == "true" ]]; then
+            echo "Deployments found:"
+            echo "$DEPLOYMENTS" | jq '.deployments[] | {url: .url, created: .created, target: .target, sha: .meta.githubCommitSha}'
+          fi
+          exit 1
+        fi
+
+        # Extract the deployment URL
+        DEPLOYMENT_URL=$(echo "$DEPLOYMENTS" | jq -r '.deployments[0].url')
+
+        # Ensure URL has https:// prefix
+        if [[ "$DEPLOYMENT_URL" != https://* ]]; then
+          DEPLOYMENT_URL="https://$DEPLOYMENT_URL"
+        fi
+
+        [[ "${{ inputs.debug }}" == "true" ]] && echo "Found deployment URL."
+        echo "preview-url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+
+    - name: Promote deployment to production
+      id: promote
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::add-mask::${{ inputs.vercel-token }}"
+
+        DEPLOYMENT_URL="${{ steps.find-deployment.outputs.preview-url }}"
+
+        [[ "${{ inputs.debug }}" == "true" ]] && echo "Promoting deployment..."
+
+        # Use Vercel CLI to promote the deployment with team scope
+        PROMOTION_OUTPUT=$(npx vercel promote "$DEPLOYMENT_URL" --yes --token "${{ inputs.vercel-token }}" --scope "${{ inputs.vercel-scope }}" 2>&1 || {
+          [[ "${{ inputs.debug }}" == "true" ]] && echo "Promotion output (on error): $PROMOTION_OUTPUT"
+          exit 1
+        })
+
+        if [[ "${{ inputs.debug }}" == "true" ]]; then
+          echo "Promotion output:"
+          echo "$PROMOTION_OUTPUT"
+          echo "Successfully promoted deployment to production."
+        fi

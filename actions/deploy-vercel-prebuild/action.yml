@@ -1,0 +1,190 @@
+name: 'Deploy Vercel Prebuild'
+description: 'Download prebuild artifact, set environment variables, run migrations, and deploy to Vercel with GitHub deployment status'
+
+inputs:
+  vercel-token:
+    description: 'Vercel API token'
+    required: true
+  vercel-scope:
+    description: 'Vercel scope (team or personal) passed to the CLI as --scope'
+    required: true
+  environment:
+    description: 'Vercel environment (preview, staging, or production)'
+    required: true
+  artifact-name:
+    description: 'Name of the GitHub artifact containing the prebuild'
+    required: false
+    default: 'vercel-build-output'
+  description:
+    description: 'Description for the GitHub deployment'
+    required: false
+    default: 'Automated deployment'
+
+outputs:
+  deployment-url:
+    description: 'URL of the deployed Vercel application'
+    value: ${{ steps.deploy.outputs.deployment-url || '' }}
+  deployment-id:
+    description: 'GitHub deployment ID'
+    value: ${{ steps.create-deployment.outputs.deployment-id }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate environment input
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "${{ inputs.environment }}" in
+          preview|staging|production) ;;
+          *)
+            echo "Error: environment must be 'preview', 'staging', or 'production' (got '${{ inputs.environment }}')" >&2
+            exit 1
+            ;;
+        esac
+
+    # Guard: no-op on forked PRs (secrets unavailable and tokens restricted)
+    - name: Guard (skip on forked PRs)
+      id: guard
+      shell: bash
+      run: |
+        set -euo pipefail
+        should_run="true"
+        if [[ "${{ github.event_name }}" == "pull_request" ]] && [[ "${{ github.event.pull_request.head.repo.fork }}" == "true" ]]; then
+          echo "Detected forked pull_request; skipping deployment steps (no-op)."
+          should_run="false"
+        fi
+        echo "should-run=$should_run" >> "$GITHUB_OUTPUT"
+
+    # Create GitHub deployment (only if allowed to run)
+    - name: Create deployment
+      id: create-deployment
+      if: steps.guard.outputs.should-run == 'true'
+      uses: twin-digital/appadap/actions/manage-deployment-status@create-shared-actions
+      with:
+        environment: ${{ inputs.environment }}
+        description: ${{ inputs.description }}
+        status: in_progress
+
+    - name: Download Vercel build output
+      if: steps.guard.outputs.should-run == 'true'
+      uses: actions/download-artifact@v5
+      with:
+        name: ${{ inputs.artifact-name }}
+
+    - name: Unpack next.js build
+      if: steps.guard.outputs.should-run == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Expect .out/next-build.tgz to exist and contain a .next/ tree
+        test -f .out/next-build.tgz
+        rm -rf .next
+        tar -xzvf .out/next-build.tgz
+        # Sanity check: ensure .next exists after extraction
+        test -d .next
+
+    - name: Set environment variables from Vercel
+      if: steps.guard.outputs.should-run == 'true'
+      uses: twin-digital/appadap/actions/pull-vercel-env@create-shared-actions
+      with:
+        # Map staging -> production for Vercel env pulls; preview stays preview; production stays production
+        environment: ${{ inputs.environment == 'staging' && 'production' || inputs.environment }}
+        vercel-token: ${{ inputs.vercel-token }}
+
+    - name: Run database migrations
+      if: steps.guard.outputs.should-run == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "Running database migrations for ${{ inputs.environment }} environment..."
+        pnpm run db:migrate
+
+    - name: Deploy to Vercel
+      id: deploy
+      if: steps.guard.outputs.should-run == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "Deploying to Vercel (${{ inputs.environment }} environment)..."
+        COMMIT_SHA="${{ github.sha }}"
+
+        if [[ "${{ inputs.environment }}" == "production" || "${{ inputs.environment }}" == "staging" ]]; then
+          # For production + staging we use --prod (staging is a staged production build in this flow)
+          DEPLOYMENT_URL="$(npx vercel deploy --archive=tgz --prebuilt --prod --yes --token "${{ inputs.vercel-token }}" --meta commitSha="$COMMIT_SHA" --scope "${{ inputs.vercel-scope }}")"
+        else
+          # Preview deployments
+          DEPLOYMENT_URL="$(npx vercel deploy --archive=tgz --prebuilt --yes --token "${{ inputs.vercel-token }}" --meta commitSha="$COMMIT_SHA" --scope "${{ inputs.vercel-scope }}")"
+        fi
+
+        # Verify deployment URL was captured
+        test -n "$DEPLOYMENT_URL"
+        echo "deployment-url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
+        echo "Successfully deployed: $DEPLOYMENT_URL"
+
+    # Update deployment status to success
+    - name: Update deployment status to success
+      if: steps.guard.outputs.should-run == 'true' && success()
+      uses: twin-digital/appadap/actions/manage-deployment-status@create-shared-actions
+      with:
+        deployment-id: ${{ steps.create-deployment.outputs.deployment-id }}
+        environment: ${{ inputs.environment }}
+        deployment-url: ${{ steps.deploy.outputs.deployment-url }}
+        status: success
+
+    # Update deployment status to failure
+    - name: Update deployment status to failure
+      if: steps.guard.outputs.should-run == 'true' && failure()
+      uses: twin-digital/appadap/actions/manage-deployment-status@create-shared-actions
+      with:
+        deployment-id: ${{ steps.create-deployment.outputs.deployment-id }}
+        environment: ${{ inputs.environment }}
+        status: failure
+
+    # Add PR comment for preview deployments (only for non-fork PRs)
+    - name: Comment on PR
+      if: steps.guard.outputs.should-run == 'true' && inputs.environment == 'preview' && github.event_name == 'pull_request' && success()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const url = `${{ steps.deploy.outputs.deployment-url }}`;
+          if (!url) {
+            core.info('No deployment URL; skipping comment.');
+            return;
+          }
+          const comment = `🚀 **Preview Deployment Ready**
+
+          Your changes have been deployed to a preview environment:
+
+          **🔗 [View Preview](${url})**
+
+          This deployment will automatically update when you push new commits to this PR.
+
+          ---
+          <sub>Deployed from commit ${context.sha.substring(0, 7)}</sub>`;
+
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          const botComment = comments.find(c =>
+            c.user?.type === 'Bot' && c.body?.includes('Preview Deployment Ready')
+          );
+
+          if (botComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: comment
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+          }

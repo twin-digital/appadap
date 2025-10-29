@@ -1,0 +1,126 @@
+name: 'Manage Deployment Status'
+description: 'Create GitHub deployment and manage its status lifecycle'
+
+inputs:
+  github-token:
+    description: 'GitHub token for API access'
+    required: false
+    default: ${{ github.token }}
+  environment:
+    description: 'Deployment environment'
+    required: true
+  description:
+    description: 'Deployment description'
+    required: false
+    default: 'Automated deployment'
+  deployment-url:
+    description: 'Deployment URL (for status updates)'
+    required: false
+  status:
+    description: 'Deployment status (in_progress, success, failure)'
+    required: true
+  deployment-id:
+    description: 'Existing deployment ID (for status updates only)'
+    required: false
+
+outputs:
+  deployment-id:
+    description: 'GitHub deployment ID'
+    value: ${{ steps.create-deployment.outputs.deployment-id || inputs.deployment-id }}
+
+runs:
+  using: composite
+  steps:
+    # Guard: no-op on forked PRs (secrets unavailable and deployments restricted)
+    - name: Guard (skip on forked PRs)
+      id: guard
+      shell: bash
+      run: |
+        set -euo pipefail
+        should_run="true"
+        if [[ "${{ github.event_name }}" == "pull_request" ]] && [[ "${{ github.event.pull_request.head.repo.fork }}" == "true" ]]; then
+          echo "::warning::Detected forked pull_request; skipping deployment management for security (no-op)."
+          should_run="false"
+        fi
+        echo "should-run=$should_run" >> "$GITHUB_OUTPUT"
+
+    # Validate environment name
+    - name: Validate environment input
+      if: steps.guard.outputs.should-run == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "${{ inputs.environment }}" in
+          Preview|Staging|Production) ;;
+          *)
+            echo "Error: environment must be exactly 'Preview', 'Staging', or 'Production' (case-sensitive, got '${{ inputs.environment }}')" >&2
+            exit 1
+            ;;
+        esac
+
+    # Create deployment (only if no deployment-id provided)
+    - name: Create deployment
+      id: create-deployment
+      if: steps.guard.outputs.should-run == 'true' && inputs.deployment-id == ''
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          // Use the correct ref for PR deployments
+          let deploymentRef = context.sha;
+          if (context.eventName === 'pull_request' && context.payload.pull_request) {
+            deploymentRef = context.payload.pull_request.head.sha;
+          }
+
+          const deployment = await github.rest.repos.createDeployment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: deploymentRef,
+            environment: '${{ inputs.environment }}',
+            description: '${{ inputs.description }}',
+            auto_merge: false
+          });
+
+          core.setOutput('deployment-id', deployment.data.id);
+          return deployment.data.id;
+
+    # Update deployment status
+    - name: Update deployment status
+      if: steps.guard.outputs.should-run == 'true'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const deploymentId = '${{ steps.create-deployment.outputs.deployment-id || inputs.deployment-id }}';
+          const status = '${{ inputs.status }}';
+          const deploymentUrl = '${{ inputs.deployment-url }}';
+
+          let statusData = {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            deployment_id: deploymentId,
+            state: status
+          };
+
+          // Add description and URLs based on status
+          switch (status) {
+            case 'in_progress':
+              statusData.description = 'Deploying to ${{ inputs.environment }} environment...';
+              break;
+            case 'success':
+              statusData.description = 'Successfully deployed to ${{ inputs.environment }} environment';
+              if (deploymentUrl) {
+                statusData.environment_url = deploymentUrl;
+                statusData.target_url = deploymentUrl;
+              }
+              break;
+            case 'failure':
+              statusData.description = 'Failed to deploy to ${{ inputs.environment }} environment';
+              if (deploymentUrl) {
+                statusData.environment_url = deploymentUrl;
+                statusData.target_url = deploymentUrl;
+              }
+              break;
+          }
+
+          await github.rest.repos.createDeploymentStatus(statusData);

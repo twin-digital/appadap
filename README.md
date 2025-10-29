@@ -34,7 +34,13 @@ Dapped apps use the following frameworks and technologies:
 
 ## Using `appadap`
 
-TBD
+#### CI/CD
+
+The `appadap` library provides the following reusable GitHub Actions:
+
+- [install-dependencies](./actions/install-dependencies/README.md): installs package manager, node, and npm dependencies
+- [install-docker](./actions/install-docker/README.md): installs `docker` and `docker-compose` CLI tools
+- [install-playwright](./actions/install-playwright/README.md): installs `playwright` browsers and system dependencies
 
 ## Developing `appadap`
 

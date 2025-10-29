@@ -1,0 +1,43 @@
+name: Create version alias tags
+
+on:
+  push:
+    tags:
+      - "v*.*.*"   # e.g., v3.1.5
+
+permissions:
+  # needed to push tags with GITHUB_TOKEN
+  contents: write  
+
+jobs:
+  tag-aliases:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history so tags are available)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Compute aliases and push
+        env:
+          REF_NAME: ${{ github.ref_name }}   # e.g., v3.1.5
+          SHA: ${{ github.sha }}
+        run: |
+          # Strip leading v and parse parts
+          VERSION="${REF_NAME#v}"            # 3.1.5
+          MAJOR="${VERSION%%.*}"             # 3
+          MINOR="${VERSION%.*}"              # 3.1
+
+          echo "Tag ${REF_NAME} on ${SHA}"
+          echo "Aliasing v${MAJOR} and v${MINOR} to ${REF_NAME}"
+
+          # Make major/minor lightweight tags pointing to the same commit
+          git tag -f "v${MAJOR}" "${SHA}"
+          git tag -f "v${MINOR}" "${SHA}"
+          git push -f origin "v${MAJOR}"
+          git push -f origin "v${MINOR}"
