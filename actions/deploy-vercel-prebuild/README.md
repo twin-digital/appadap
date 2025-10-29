@@ -9,33 +9,33 @@ This is an opinionated, batteries-included deployment action for Vercel applicat
 ### Deploy to preview environment
 
 ```yaml
-      - uses: twin-digital/appadap/actions/deploy-vercel-prebuild@v1
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-scope: ${{ vars.VERCEL_SCOPE }}
-          environment: preview
+- uses: twin-digital/appadap/actions/deploy-vercel-prebuild@v1
+  with:
+    vercel-token: ${{ secrets.VERCEL_TOKEN }}
+    vercel-scope: ${{ vars.VERCEL_SCOPE }}
+    environment: preview
 ```
 
 ### Deploy to staging environment
 
 ```yaml
-      - uses: twin-digital/appadap/actions/deploy-vercel-prebuild@v1
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-scope: ${{ vars.VERCEL_SCOPE }}
-          environment: staging
-          description: 'Staging deployment for PR #${{ github.event.number }}'
+- uses: twin-digital/appadap/actions/deploy-vercel-prebuild@v1
+  with:
+    vercel-token: ${{ secrets.VERCEL_TOKEN }}
+    vercel-scope: ${{ vars.VERCEL_SCOPE }}
+    environment: staging
+    description: 'Staging deployment for PR #${{ github.event.number }}'
 ```
 
 ### Deploy to production environment
 
 ```yaml
-      - uses: twin-digital/appadap/actions/deploy-vercel-prebuild@v1
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-scope: ${{ vars.VERCEL_SCOPE }}
-          environment: production
-          description: 'Production deployment from main branch'
+- uses: twin-digital/appadap/actions/deploy-vercel-prebuild@v1
+  with:
+    vercel-token: ${{ secrets.VERCEL_TOKEN }}
+    vercel-scope: ${{ vars.VERCEL_SCOPE }}
+    environment: production
+    description: 'Production deployment from main branch'
 ```
 
 ## Prerequisites

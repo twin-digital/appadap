@@ -9,7 +9,7 @@ This action handles the common setup tasks needed across all jobs in our workflo
 ## Usage
 
 ```yaml
-      - uses: twin-digital/appadap/actions/install-dependencies@v1
+- uses: twin-digital/appadap/actions/install-dependencies@v1
 ```
 
 ## Prerequisites

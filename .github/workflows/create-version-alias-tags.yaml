@@ -3,11 +3,11 @@ name: Create version alias tags
 on:
   push:
     tags:
-      - "v*.*.*"   # e.g., v3.1.5
+      - 'v*.*.*' # e.g., v3.1.5
 
 permissions:
   # needed to push tags with GITHUB_TOKEN
-  contents: write  
+  contents: write
 
 jobs:
   tag-aliases:
@@ -25,7 +25,7 @@ jobs:
 
       - name: Compute aliases and push
         env:
-          REF_NAME: ${{ github.ref_name }}   # e.g., v3.1.5
+          REF_NAME: ${{ github.ref_name }} # e.g., v3.1.5
           SHA: ${{ github.sha }}
         run: |
           # Strip leading v and parse parts

@@ -9,34 +9,34 @@ This action pulls environment variables from Vercel and saves them to a file usi
 ### Basic usage
 
 ```yaml
-      - name: Pull Vercel environment variables
-        id: pull
-        uses: twin-digital/appadap/actions/pull-vercel-env@v1
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          environment: production
-      
-      # Use environment variables for your steps
-      - name: Run command with env
-        run: pnpm run some-command
-        env:
-          # Environment variables are now available
-      
-      # Clean up when done
-      - name: Remove environment file
-        if: always()
-        run: rm -f ${{ steps.pull.outputs.envfile-path }}
+- name: Pull Vercel environment variables
+  id: pull
+  uses: twin-digital/appadap/actions/pull-vercel-env@v1
+  with:
+    vercel-token: ${{ secrets.VERCEL_TOKEN }}
+    environment: production
+
+# Use environment variables for your steps
+- name: Run command with env
+  run: pnpm run some-command
+  env:
+    # Environment variables are now available
+
+# Clean up when done
+- name: Remove environment file
+  if: always()
+  run: rm -f ${{ steps.pull.outputs.envfile-path }}
 ```
 
 ### Custom output file
 
 ```yaml
-      - name: Pull Vercel environment variables
-        uses: twin-digital/appadap/actions/pull-vercel-env@v1
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          environment: preview
-          file: .env.preview
+- name: Pull Vercel environment variables
+  uses: twin-digital/appadap/actions/pull-vercel-env@v1
+  with:
+    vercel-token: ${{ secrets.VERCEL_TOKEN }}
+    environment: preview
+    file: .env.preview
 ```
 
 ## Prerequisites
