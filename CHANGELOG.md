@@ -1,5 +1,11 @@
 # @twin-digital/appadap
 
+## 0.1.1
+
+### Patch Changes
+
+- 64c577c: fix tag publishing failures
+
 ## 0.1.0
 
 ### Minor Changes
