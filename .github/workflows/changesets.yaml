@@ -39,6 +39,7 @@ jobs:
         uses: changesets/action@v1
         with:
           commit: 'chore: release'
+          commitMode: 'github-api'
           title: 'chore: release'
           version: pnpm changeset:version
           publish: pnpm changeset:publish
