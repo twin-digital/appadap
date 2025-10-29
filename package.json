@@ -1,4 +1,5 @@
-{
+{ 
+  "private": true,
   "name": "@twin-digital/appadap",
   "version": "0.1.0",
   "type": "module",
