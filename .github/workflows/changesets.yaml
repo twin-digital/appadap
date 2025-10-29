@@ -49,7 +49,7 @@ jobs:
       - name: Create repo tag vX.Y.Z for primary package
         if: steps.changesets.outputs.published == 'true'
         env:
-          PRIMARY_PACKAGE: "@your-scope/your-package"
+          PRIMARY_PACKAGE: "@twin-digital/appadap"
           PUBLISHED_JSON: ${{ steps.changesets.outputs.publishedPackages }}
         run: |
           set -euo pipefail
