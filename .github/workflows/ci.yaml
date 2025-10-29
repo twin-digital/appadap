@@ -108,7 +108,7 @@ jobs:
 
       # install node, pnpm, and package dependencies
       - name: Setup pnpm and install dependencies
-        uses: ./actions/install-dependencies
+        uses: twin-digital/appadap/actions/install-dependencies@v0
 
       # perform validation step
       - name: Run ${{ matrix.script }}
@@ -124,7 +124,7 @@ jobs:
 
       # install node, pnpm, and package dependencies
       - name: Setup pnpm and install dependencies
-        uses: ./actions/install-dependencies
+        uses: twin-digital/appadap/actions/install-dependencies@v0
 
       # Validate required secrets for build type
       - name: Validate required secrets
@@ -288,11 +288,11 @@ jobs:
 
       # install tools and package dependencies
       - name: Setup pnpm and install dependencies
-        uses: ./actions/install-dependencies@v0
+        uses: twin-digital/appadap/actions/install-dependencies@v0
       - name: Install Playwright
-        uses: ./actions/install-playwright@v0
+        uses: twin-digital/appadap/actions/install-playwright@v0
       - name: Install Docker CLI
-        uses: ./actions/actions/install-docker@v0
+        uses: twin-digital/appadap/actions/install-docker@v0
 
       # Download and restore build artifacts based on build type
       - name: Download build output

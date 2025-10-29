@@ -31,7 +31,7 @@ jobs:
 
       # setup tools and install dependencies
       - name: Setup dependencies
-        uses: ./actions/install-dependencies
+        uses: twin-digital/appadap/actions/install-dependencies@v0
 
       # perform changesets release operations
       - name: Create Release Pull Request or Publish to npm
