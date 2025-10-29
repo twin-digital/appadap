@@ -1,0 +1,19 @@
+{
+  "name": "@twin-digital/appadap",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "changeset": "changeset",
+    "changeset:publish": "changeset publish",
+    "changeset:status": "changeset status",
+    "changeset:version": "changeset version"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.7"
+  },
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=8"
+  },
+  "packageManager": "pnpm@10.17.0"
+}
