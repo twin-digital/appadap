@@ -7,7 +7,7 @@ inputs:
     required: false
     default: ${{ github.token }}
   environment:
-    description: 'Deployment environment'
+    description: 'Deployment environment (preview, staging, production)'
     required: true
   description:
     description: 'Deployment description'
@@ -51,9 +51,9 @@ runs:
       run: |
         set -euo pipefail
         case "${{ inputs.environment }}" in
-          Preview|Staging|Production) ;;
+          preview|staging|production) ;;
           *)
-            echo "Error: environment must be exactly 'Preview', 'Staging', or 'Production' (case-sensitive, got '${{ inputs.environment }}')" >&2
+            echo "Error: environment must be exactly 'preview', 'staging', or 'production' (case-sensitive, got '${{ inputs.environment }}')" >&2
             exit 1
             ;;
         esac

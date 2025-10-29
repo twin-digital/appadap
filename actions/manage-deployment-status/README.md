@@ -13,7 +13,7 @@ This action creates GitHub deployment records and manages their status lifecycle
         id: create
         uses: twin-digital/appadap/actions/manage-deployment-status@v1
         with:
-          environment: Preview
+          environment: preview
           description: 'Preview deployment for PR #${{ github.event.number }}'
           status: in_progress
 ```
@@ -25,7 +25,7 @@ This action creates GitHub deployment records and manages their status lifecycle
         uses: twin-digital/appadap/actions/manage-deployment-status@v1
         with:
           deployment-id: ${{ steps.create.outputs.deployment-id }}
-          environment: Preview
+          environment: preview
           deployment-url: ${{ steps.deploy.outputs.url }}
           status: success
 ```
@@ -38,7 +38,7 @@ This action creates GitHub deployment records and manages their status lifecycle
         uses: twin-digital/appadap/actions/manage-deployment-status@v1
         with:
           deployment-id: ${{ steps.create.outputs.deployment-id }}
-          environment: Preview
+          environment: preview
           status: failure
 ```
 
@@ -49,7 +49,7 @@ This action creates GitHub deployment records and manages their status lifecycle
         id: create
         uses: twin-digital/appadap/actions/manage-deployment-status@v1
         with:
-          environment: Production
+          environment: production
           description: 'Production deployment'
           status: in_progress
       
@@ -60,7 +60,7 @@ This action creates GitHub deployment records and manages their status lifecycle
         uses: twin-digital/appadap/actions/manage-deployment-status@v1
         with:
           deployment-id: ${{ steps.create.outputs.deployment-id }}
-          environment: Production
+          environment: production
           deployment-url: https://myapp.vercel.app
           status: success
       
@@ -69,7 +69,7 @@ This action creates GitHub deployment records and manages their status lifecycle
         uses: twin-digital/appadap/actions/manage-deployment-status@v1
         with:
           deployment-id: ${{ steps.create.outputs.deployment-id }}
-          environment: Production
+          environment: production
           status: failure
 ```
 
