@@ -44,3 +44,33 @@ jobs:
           publish: pnpm changeset:publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Pick your "primary" package (the one consumers use to pin versions)./
+      - name: Create repo tag vX.Y.Z for primary package
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          PRIMARY_PACKAGE: "@your-scope/your-package"
+          PUBLISHED_JSON: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          set -euo pipefail
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          echo "Published packages JSON:"
+          echo "$PUBLISHED_JSON"
+
+          # Extract the version number for the primary package
+          VERSION=$(echo "$PUBLISHED_JSON" | jq -r --arg name "$PRIMARY_PACKAGE" '
+            .[] | select(.name == $name) | .version
+          ')
+
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "Primary package $PRIMARY_PACKAGE not found in published list, skipping."
+            exit 0
+          fi
+
+          echo "Creating repo tag v$VERSION for $PRIMARY_PACKAGE"
+
+          git tag -f "v$VERSION"
+          git push -f origin "v$VERSION"
