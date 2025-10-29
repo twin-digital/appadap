@@ -60,7 +60,7 @@ runs:
     - name: Create deployment
       id: create-deployment
       if: steps.guard.outputs.should-run == 'true'
-      uses: ../manage-deployment-status
+      uses: twin-digital/appadap/actions/manage-deployment-status@create-shared-actions
       with:
         environment: ${{ inputs.environment }}
         description: ${{ inputs.description }}
@@ -86,7 +86,7 @@ runs:
 
     - name: Set environment variables from Vercel
       if: steps.guard.outputs.should-run == 'true'
-      uses: ../pull-vercel-env
+      uses: twin-digital/appadap/actions/pull-vercel-env@create-shared-actions
       with:
         # Map staging -> production for Vercel env pulls; preview stays preview; production stays production
         environment: ${{ inputs.environment == 'staging' && 'production' || inputs.environment }}
@@ -134,7 +134,7 @@ runs:
     # Update deployment status to success
     - name: Update deployment status to success
       if: steps.guard.outputs.should-run == 'true' && success()
-      uses: ../manage-deployment-status
+      uses: twin-digital/appadap/actions/manage-deployment-status@create-shared-actions
       with:
         deployment-id: ${{ steps.create-deployment.outputs.deployment-id }}
         environment: ${{ inputs.environment }}
@@ -144,7 +144,7 @@ runs:
     # Update deployment status to failure
     - name: Update deployment status to failure
       if: steps.guard.outputs.should-run == 'true' && failure()
-      uses: ../manage-deployment-status
+      uses: twin-digital/appadap/actions/manage-deployment-status@create-shared-actions
       with:
         deployment-id: ${{ steps.create-deployment.outputs.deployment-id }}
         environment: ${{ inputs.environment }}

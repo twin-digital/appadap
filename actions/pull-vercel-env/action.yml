@@ -1,0 +1,88 @@
+name: 'Pull Vercel Environment'
+description: 'Pull environment variables from Vercel and save them to a specified file'
+
+inputs:
+  vercel-token:
+    description: 'Vercel API token'
+    required: true
+  environment:
+    description: 'Vercel environment (preview or production)'
+    required: true
+  file:
+    description: 'Output file to store environment variables'
+    required: false
+    default: '.env'
+
+outputs:
+  envfile-path:
+    description: 'Path to the generated environment file'
+    value: ${{ inputs.file }}
+
+runs:
+  using: composite
+  steps:
+    # Guard: no-op on forked PRs (secrets unavailable and should not be exposed)
+    - name: Guard (skip on forked PRs)
+      id: guard
+      shell: bash
+      run: |
+        set -euo pipefail
+        should_run="true"
+        if [[ "${{ github.event_name }}" == "pull_request" ]] && [[ "${{ github.event.pull_request.head.repo.fork }}" == "true" ]]; then
+          echo "::warning::Detected forked pull_request; skipping environment variable pull for security (no-op)."
+          should_run="false"
+        fi
+        echo "should-run=$should_run" >> "$GITHUB_OUTPUT"
+
+    - name: Validate environment input
+      if: steps.guard.outputs.should-run == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "${{ inputs.environment }}" != "preview" && "${{ inputs.environment }}" != "production" ]]; then
+          echo "Error: environment must be either 'preview' or 'production', got '${{ inputs.environment }}'"
+          exit 1
+        fi
+
+    - name: Pull Vercel environment variables
+      if: steps.guard.outputs.should-run == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        
+        # Set restrictive umask to prevent world-readable secrets
+        umask 077
+        
+        echo "Pulling environment variables from Vercel (${{ inputs.environment }} environment)..."
+        echo "Output file: ${{ inputs.file }}"
+
+        # Remove existing file if it exists
+        if [[ -f "${{ inputs.file }}" ]]; then
+          echo "Removing existing file: ${{ inputs.file }}"
+          rm -f "${{ inputs.file }}"
+        fi
+
+        # Pull environment variables from Vercel
+        npx vercel env pull "${{ inputs.file }}" \
+          --environment=${{ inputs.environment }} \
+          --yes \
+          --token "${{ inputs.vercel-token }}"
+
+        # Verify the file was created
+        if [[ ! -f "${{ inputs.file }}" ]]; then
+          echo "Error: Failed to pull environment variables from Vercel"
+          exit 1
+        fi
+
+        # Show file info (without revealing content)
+        file_size=$(stat -c%s "${{ inputs.file }}" 2>/dev/null || stat -f%z "${{ inputs.file }}" 2>/dev/null || echo "unknown")
+        line_count=$(wc -l < "${{ inputs.file }}" 2>/dev/null || echo "unknown")
+
+        echo "Successfully pulled environment variables to ${{ inputs.file }}"
+        echo "File size: ${file_size} bytes"
+        echo "Number of lines: ${line_count}"
+
+        # Verify file is not empty
+        if [[ "$file_size" == "0" ]] || [[ "$line_count" == "0" ]]; then
+          echo "Warning: The pulled environment file appears to be empty"
+        fi

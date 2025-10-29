@@ -42,6 +42,7 @@ This is an opinionated, batteries-included deployment action for Vercel applicat
 
 This action expects a standardized project setup:
 
+- `.vercel/project.json` must exist in the repository root (created by running `vercel link` locally and should be committed)
 - The specified artifact must exist and contain a valid Vercel prebuild (`.out/next-build.tgz` with `.next/` directory)
 - Node.js and pnpm must be available in the runner environment
 - Vercel CLI must be available (via `npx vercel`)
