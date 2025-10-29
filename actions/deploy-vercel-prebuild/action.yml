@@ -14,7 +14,7 @@ inputs:
   artifact-name:
     description: 'Name of the GitHub artifact containing the prebuild'
     required: false
-    default: 'vercel-build-output'
+    default: 'build-output'
   description:
     description: 'Description for the GitHub deployment'
     required: false
@@ -72,15 +72,15 @@ runs:
       with:
         name: ${{ inputs.artifact-name }}
 
-    - name: Unpack next.js build
+    - name: Unpack build artifacts
       if: steps.guard.outputs.should-run == 'true'
       shell: bash
       run: |
         set -euo pipefail
-        # Expect .out/next-build.tgz to exist and contain a .next/ tree
-        test -f .out/next-build.tgz
+        # Expect .out/build-output.tgz to exist and contain a .next/ tree
+        test -f .out/build-output.tgz
         rm -rf .next
-        tar -xzvf .out/next-build.tgz
+        tar -xzvf .out/build-output.tgz
         # Sanity check: ensure .next exists after extraction
         test -d .next
 
