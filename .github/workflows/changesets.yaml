@@ -45,11 +45,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Pick your "primary" package (the one consumers use to pin versions)./
-      - name: Create repo tag vX.Y.Z for primary package
+      # create major/minor aliases (e.g. 3 & 3.1)
+      - name: Update major/minor alias tags
         if: steps.changesets.outputs.published == 'true'
         env:
-          PRIMARY_PACKAGE: "@twin-digital/appadap"
+          # Set this if you’re a monorepo and only want aliases from one package.
+          # Omit PRIMARY_PACKAGE for single-package repos
+          # PRIMARY_PACKAGE: "@your-scope/primary-pkg"
           PUBLISHED_JSON: ${{ steps.changesets.outputs.publishedPackages }}
         run: |
           set -euo pipefail
@@ -57,20 +59,37 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          echo "Published packages JSON:"
-          echo "$PUBLISHED_JSON"
-
-          # Extract the version number for the primary package
-          VERSION=$(echo "$PUBLISHED_JSON" | jq -r --arg name "$PRIMARY_PACKAGE" '
-            .[] | select(.name == $name) | .version
-          ')
+          # --- Resolve VERSION from Changesets output ---
+          if [ -n "${PRIMARY_PACKAGE:-}" ]; then
+            # Monorepo version: Resolve by PRIMARY_PACKAGE name
+            VERSION="$(echo "$PUBLISHED_JSON" \
+              | jq -r --arg name "$PRIMARY_PACKAGE" '.[] | select(.name==$name) | .version')"
+          else
+            # Single-package repo: take the first published item
+            VERSION="$(echo "$PUBLISHED_JSON" | jq -r '.[0].version')"
+          fi
 
           if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
-            echo "Primary package $PRIMARY_PACKAGE not found in published list, skipping."
+            echo "No version found (package not published this run?). Skipping."
             exit 0
           fi
 
-          echo "Creating repo tag v$VERSION for $PRIMARY_PACKAGE"
+          MAJOR="${VERSION%%.*}"   # e.g. 0
+          MINOR="${VERSION%.*}"    # e.g. 0.1
+          TAG="v$VERSION"
 
-          git tag -f "v$VERSION"
-          git push -f origin "v$VERSION"
+          # --- Decide target commit for the aliases ---
+          # Prefer the repo tag (if you created it earlier in this workflow).
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            TARGET_SHA="$(git rev-list -n 1 "$TAG")"
+          else
+            # Fallback: current commit of the publish job
+            TARGET_SHA="${GITHUB_SHA}"
+          fi
+
+          echo "Aliasing v${MAJOR} and v${MINOR} -> ${TAG} (${TARGET_SHA})"
+
+          # --- Create/force-update moving alias tags ---
+          git tag -f "v${MAJOR}" "${TARGET_SHA}"
+          git tag -f "v${MINOR}" "${TARGET_SHA}"
+          git push -f origin "v${MAJOR}" "v${MINOR}"
