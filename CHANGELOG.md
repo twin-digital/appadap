@@ -1,5 +1,11 @@
 # @twin-digital/appadap
 
+## 0.2.0
+
+### Minor Changes
+
+- 309b032: standardize on lowercase environment names everywhere
+
 ## 0.1.4
 
 ### Patch Changes

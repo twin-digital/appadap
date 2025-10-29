@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "@twin-digital/appadap",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "changeset": "changeset",
