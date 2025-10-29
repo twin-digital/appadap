@@ -1,5 +1,11 @@
 # @twin-digital/appadap
 
+## 0.1.2
+
+### Patch Changes
+
+- b14471f: apply additional fix to tag publishing
+
 ## 0.1.1
 
 ### Patch Changes
