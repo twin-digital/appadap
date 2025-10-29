@@ -23,7 +23,7 @@ inputs:
 outputs:
   deployment-url:
     description: 'URL of the deployed Vercel application'
-    value: ${{ steps.deploy.outputs.deployment-url }}
+    value: ${{ steps.deploy.outputs.deployment-url || '' }}
   deployment-id:
     description: 'GitHub deployment ID'
     value: ${{ steps.create-deployment.outputs.deployment-id }}
@@ -121,15 +121,6 @@ runs:
         test -n "$DEPLOYMENT_URL"
         echo "deployment-url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
         echo "Successfully deployed: $DEPLOYMENT_URL"
-
-    # If we skipped (forked PR), still provide a deploy step output so composite outputs resolve cleanly
-    - name: No-op deploy outputs
-      id: deploy
-      if: steps.guard.outputs.should-run == 'false'
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "deployment-url=" >> "$GITHUB_OUTPUT"
 
     # Update deployment status to success
     - name: Update deployment status to success

@@ -4,7 +4,7 @@
 
 add shared actions
 
-- deploy-vercel-prebiuld
+- deploy-vercel-prebuild
 - install-dependencies
 - install-docker
 - install-playwright
