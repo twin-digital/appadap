@@ -1,5 +1,11 @@
 # @twin-digital/appadap
 
+## 0.4.2
+
+### Patch Changes
+
+- a477bdb: update e2e job to use fast runners
+
 ## 0.4.1
 
 ### Patch Changes
