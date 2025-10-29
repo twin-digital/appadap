@@ -27,6 +27,10 @@ on:
       - '!.changeset/*.md'
   workflow_call:
     inputs:
+      validate_scripts:
+        default: 'lint,test'
+        description: 'Comma-delimited list of npm scripts to run for validation'
+        type: string
       e2e_script:
         default: 'test:e2e'
         type: string
@@ -49,8 +53,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint_build_test:
+  validate:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        script: ${{ fromJson(format('["{0}"]', join(split(inputs.validate_scripts, ','), '","'))) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -58,10 +65,18 @@ jobs:
       - name: Setup pnpm and install dependencies
         uses: ./actions/install-dependencies
 
-      # perform validation steps
-      - run: pnpm run db:generate-client
-      - run: pnpm run lint
-      - run: pnpm run test
+      # perform validation step
+      - name: Run ${{ matrix.script }}
+        run: pnpm run "${{ matrix.script }}"
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # install node, pnpm, and package dependencies
+      - name: Setup pnpm and install dependencies
+        uses: ./actions/install-dependencies
 
       # build production or preview app build, based on git ref
       - name: Vercel production build
@@ -140,7 +155,7 @@ jobs:
           echo "Decision: run_e2e=$final"
 
   e2e:
-    needs: [evaluate, lint_build_test]
+    needs: [evaluate, validate, build]
     runs-on: ubuntu-latest
     if: needs.evaluate.outputs.run_e2e == 'true'
     steps:
