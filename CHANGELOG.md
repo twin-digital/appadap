@@ -1,5 +1,11 @@
 # @twin-digital/appadap
 
+## 0.1.4
+
+### Patch Changes
+
+- 0e58657: fix "missing version" errors when using the deploy-vercel-prebuild or promote-vercel-build actions
+
 ## 0.1.3
 
 ### Patch Changes
