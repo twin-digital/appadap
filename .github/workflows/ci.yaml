@@ -31,6 +31,10 @@ on:
         default: 'lint,test'
         description: 'Comma-delimited list of npm scripts to run for validation'
         type: string
+      build_type:
+        default: 'auto'
+        description: "Build type: 'auto' (default), 'vercel', 'nextjs', 'skip'"
+        type: string
       e2e_script:
         default: 'test:e2e'
         type: string
@@ -53,6 +57,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Detect build type if set to 'auto'
+  detect_build_type:
+    runs-on: ubuntu-latest
+    outputs:
+      build_type: ${{ steps.detect.outputs.build_type }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: detect
+        shell: bash
+        run: |
+          build_type="${{ inputs.build_type }}"
+
+          # If not auto, use the specified value
+          if [[ "$build_type" != "auto" ]]; then
+            echo "build_type=$build_type" >> $GITHUB_OUTPUT
+            echo "Using specified build type: $build_type"
+            exit 0
+          fi
+
+          # Auto-detect based on project files
+          detected="skip"
+
+          if [[ -f "vercel.json" ]] || [[ -d ".vercel" ]]; then
+            detected="vercel"
+          elif [[ -f "next.config.js" ]] || [[ -f "next.config.ts" ]] || [[ -f "next.config.mjs" ]]; then
+            detected="nextjs"
+          fi
+
+          echo "build_type=$detected" >> $GITHUB_OUTPUT
+          echo "Auto-detected build type: $detected"
+
   validate:
     runs-on: ubuntu-latest
     strategy:
@@ -70,7 +106,10 @@ jobs:
         run: pnpm run "${{ matrix.script }}"
 
   build:
+    needs: [detect_build_type]
     runs-on: ubuntu-latest
+    # Skip the build job entirely if build_type is 'skip'
+    if: needs.detect_build_type.outputs.build_type != 'skip'
     steps:
       - uses: actions/checkout@v4
 
@@ -78,33 +117,56 @@ jobs:
       - name: Setup pnpm and install dependencies
         uses: ./actions/install-dependencies
 
-      # build production or preview app build, based on git ref
-      - name: Vercel production build
-        if: github.ref == 'refs/heads/main'
-        run: |
-          npx vercel build --prod --yes --token "${VERCEL_TOKEN}"
-          mkdir -p .out
-          tar -czf .out/next-build.tgz .next
+      # Build based on detected type using inline script
+      - name: Build application
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      - name: Vercel preview build
-        if: github.ref != 'refs/heads/main'
         run: |
-          npx vercel build --yes --token "${VERCEL_TOKEN}"
-          mkdir -p .out
-          tar -czf .out/next-build.tgz .next
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          set -euo pipefail
 
-      # upload build result as an artifact
-      - name: Upload Vercel build output
+          build_type="${{ needs.detect_build_type.outputs.build_type }}"
+          is_production="${{ github.ref == 'refs/heads/main' }}"
+
+          echo "Building with type: $build_type (production: $is_production)"
+          mkdir -p .out
+
+          case "$build_type" in
+            vercel)
+              if [[ "$is_production" == "true" ]]; then
+                npx vercel build --prod --yes --token "$VERCEL_TOKEN"
+              else
+                npx vercel build --yes --token "$VERCEL_TOKEN"
+              fi
+              tar -czf .out/build-output.tgz .next
+              ;;
+              
+            nextjs)
+              pnpm run build
+              tar -czf .out/build-output.tgz .next
+              ;;
+              
+            skip)
+              echo "Build type is 'skip', nothing to build"
+              exit 0
+              ;;
+              
+            *)
+              echo "::error::Unknown build type: $build_type"
+              exit 1
+              ;;
+          esac
+
+          echo "✅ Build completed successfully"
+
+      # Upload build artifacts
+      - name: Upload build output
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           include-hidden-files: true
-          name: vercel-build-output
+          name: build-output
           path: |
-            .out/next-build.tgz
+            .out/build-output.tgz
             .vercel/
             !.vercel/.env.*
           retention-days: 30
@@ -155,9 +217,12 @@ jobs:
           echo "Decision: run_e2e=$final"
 
   e2e:
-    needs: [evaluate, validate, build]
+    needs: [evaluate, validate, detect_build_type, build]
     runs-on: ubuntu-latest
-    if: needs.evaluate.outputs.run_e2e == 'true'
+    # Run if E2E is enabled; build job might be skipped but that's OK
+    if: |
+      needs.evaluate.outputs.run_e2e == 'true' &&
+      !cancelled()
     steps:
       - uses: actions/checkout@v4
 
@@ -190,15 +255,38 @@ jobs:
       - name: Install Docker CLI
         uses: twin-digital/appadap/actions/install-docker@v0
 
-      # download build artifact from CI job
-      - name: Download Vercel build output
+      # Download and restore build artifacts based on build type
+      - name: Download build output
+        if: needs.detect_build_type.outputs.build_type != 'skip'
         uses: actions/download-artifact@v5
         with:
-          name: vercel-build-output
-      - name: Unpack next.js build
+          name: build-output
+
+      - name: Restore build output
+        if: needs.detect_build_type.outputs.build_type != 'skip'
         run: |
-          rm -rf .next
-          tar -xzvf .out/next-build.tgz
+          set -euo pipefail
+
+          build_type="${{ needs.detect_build_type.outputs.build_type }}"
+
+          echo "Restoring build artifacts for type: $build_type"
+
+          case "$build_type" in
+            vercel|nextjs)
+              rm -rf .next
+              tar -xzvf .out/build-output.tgz
+              echo "✅ Restored .next directory"
+              ;;
+              
+            skip)
+              echo "No build artifacts to restore (build_type: skip)"
+              ;;
+              
+            *)
+              echo "::error::Unknown build type: $build_type"
+              exit 1
+              ;;
+          esac
 
       # invoke E2E tests and upload results as an artifact
       - name: Run E2E
