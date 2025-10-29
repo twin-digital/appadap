@@ -1,5 +1,17 @@
 # @twin-digital/appadap
 
+## 0.3.0
+
+### Minor Changes
+
+- 5092182: add CI workflow for validating and building projects
+
+### Patch Changes
+
+- 5092182: resolve CI deployment failures caused by circular check requirements
+- 10084c6: switch changesets to github-api mode so commits are signed
+- 5092182: introduce linting and fix pre-existing issues
+
 ## 0.2.0
 
 ### Minor Changes
@@ -35,7 +47,6 @@
 ### Minor Changes
 
 - 64d90ca: add shared actions
-
   - deploy-vercel-prebuild
   - install-dependencies
   - install-docker
