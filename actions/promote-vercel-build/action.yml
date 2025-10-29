@@ -9,11 +9,11 @@ inputs:
   vercel-token:
     description: 'Vercel API token'
     required: true
-  vercel-team-slug:
-    description: 'Vercel team slug for scoping API calls'
-    required: true
   vercel-project-id:
     description: 'Vercel project ID'
+    required: true
+  vercel-scope:
+    description: 'Vercel scope (team or personal) passed to the CLI as --scope'
     required: true
   ci-workflow-file:
     description: 'Workflow file used to verify CI success (e.g., ci.yaml)'
@@ -145,7 +145,7 @@ runs:
         [[ "${{ inputs.debug }}" == "true" ]] && echo "Promoting deployment..."
 
         # Use Vercel CLI to promote the deployment with team scope
-        PROMOTION_OUTPUT=$(npx vercel promote "$DEPLOYMENT_URL" --yes --token "${{ inputs.vercel-token }}" --scope "${{ inputs.vercel-team-slug }}" 2>&1 || {
+        PROMOTION_OUTPUT=$(npx vercel promote "$DEPLOYMENT_URL" --yes --token "${{ inputs.vercel-token }}" --scope "${{ inputs.vercel-scope }}" 2>&1 || {
           [[ "${{ inputs.debug }}" == "true" ]] && echo "Promotion output (on error): $PROMOTION_OUTPUT"
           exit 1
         })

@@ -76,11 +76,11 @@ Git ref of the build to promote (branch, tag, or commit SHA). The action will re
 
 Vercel project ID.
 
-### `vercel-team-slug`
+### `vercel-scope`
 
 **Required:** Yes
 
-Vercel team slug for scoping API calls.
+Vercel scope (team or personal) passed to the CLI as --scope.
 
 ### `vercel-token`
 
