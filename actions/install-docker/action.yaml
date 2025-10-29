@@ -1,0 +1,149 @@
+name: 'Install Docker CLI (portable, user-space)'
+description: 'Ensure Docker CLI and docker-compose are available without sudo; installs each independently if needed'
+inputs:
+  docker-version:
+    required: false
+    default: '28.5.0'
+  docker-compose-version:
+    required: false
+    default: '2.40.0'
+  architecture:
+    required: false
+    default: 'auto' # auto-detect x86_64 / aarch64
+runs:
+  using: 'composite'
+  steps:
+    - name: Detect architecture
+      id: arch
+      shell: bash
+      run: |
+        set -euo pipefail
+        req="${{ inputs.architecture }}"
+        if [[ "$req" == "auto" ]]; then
+          case "$(uname -m)" in
+            x86_64|amd64)  arch="x86_64" ;;
+            aarch64|arm64) arch="aarch64" ;;
+            *) echo "Unsupported arch: $(uname -m)"; exit 1 ;;
+          esac
+        else
+          arch="$req"
+        fi
+        echo "arch=$arch" >> "$GITHUB_OUTPUT"
+        echo "::notice::Detected architecture: $arch"
+
+    - name: Probe existing Docker/Compose
+      id: probe
+      shell: bash
+      run: |
+        set -euo pipefail
+        want_d="${{ inputs.docker-version }}"
+        want_c="${{ inputs.docker-compose-version }}"
+
+        # Existence checks (don't rely on $(...) exit behavior)
+        if command -v docker >/dev/null 2>&1; then
+          have_d_ver="$(docker --version | sed -n 's/^Docker version \([0-9.]*\).*/\1/p')"
+          need_d="true"
+          if [[ -n "$have_d_ver" ]]; then
+            first="$(printf '%s\n%s\n' "$want_d" "$have_d_ver" | sort -V | head -n1)"
+            [[ "$first" == "$want_d" ]] && need_d="false"
+          fi
+        else
+          have_d_ver=""
+          need_d="true"
+        fi
+
+        if command -v docker-compose >/dev/null 2>&1; then
+          have_c_ver="$(docker-compose --version | sed -n 's/.*version v\?\([0-9.]*\).*/\1/p')"
+          need_c="true"
+          if [[ -n "$have_c_ver" ]]; then
+            firstc="$(printf '%s\n%s\n' "$want_c" "$have_c_ver" | sort -V | head -n1)"
+            [[ "$firstc" == "$want_c" ]] && need_c="false"
+          fi
+        else
+          have_c_ver=""
+          need_c="true"
+        fi
+
+        echo "need_docker=$need_d"                   | tee -a "$GITHUB_OUTPUT"
+        echo "need_compose=$need_c"                  | tee -a "$GITHUB_OUTPUT"
+        echo "have_docker_ver=${have_d_ver:-}"       | tee -a "$GITHUB_OUTPUT"
+        echo "have_compose_ver=${have_c_ver:-}"      | tee -a "$GITHUB_OUTPUT"
+        echo "::notice::need_docker=$need_d have=$have_d_ver; need_compose=$need_c have=$have_c_ver"
+
+    # ---- Docker CLI (independent) ----
+    - name: Cache Docker CLI
+      if: ${{ steps.probe.outputs.need_docker == 'true' }}
+      uses: actions/cache@v4
+      id: cache-docker
+      with:
+        path: docker-${{ inputs.docker-version }}-${{ steps.arch.outputs.arch }}.tgz
+        key: docker-cli-${{ inputs.docker-version }}-${{ steps.arch.outputs.arch }}
+
+    - name: Download Docker CLI
+      if: ${{ steps.probe.outputs.need_docker == 'true' && steps.cache-docker.outputs.cache-hit != 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        V="${{ inputs.docker-version }}"
+        ARCH="${{ steps.arch.outputs.arch }}"
+        echo "Downloading Docker CLI $V ($ARCH)…"
+        curl -fsSL "https://download.docker.com/linux/static/stable/${ARCH}/docker-${V}.tgz" \
+          -o "docker-${V}-${ARCH}.tgz"
+
+    - name: Install Docker CLI to $HOME/.local/bin
+      if: ${{ steps.probe.outputs.need_docker == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        V="${{ inputs.docker-version }}"
+        ARCH="${{ steps.arch.outputs.arch }}"
+        BIN="$HOME/.local/bin"
+        mkdir -p "$BIN"
+        tar xzf "docker-${V}-${ARCH}.tgz" --strip-components=1 -C "$BIN" docker/docker
+        chmod +x "$BIN/docker"
+        echo "$BIN" >> "$GITHUB_PATH"
+
+    # ---- docker-compose (independent) ----
+    - name: Cache docker-compose
+      if: ${{ steps.probe.outputs.need_compose == 'true' }}
+      uses: actions/cache@v4
+      id: cache-compose
+      with:
+        path: docker-compose-${{ inputs.docker-compose-version }}-${{ steps.arch.outputs.arch }}
+        key: docker-compose-${{ inputs.docker-compose-version }}-${{ steps.arch.outputs.arch }}
+
+    - name: Download docker-compose
+      if: ${{ steps.probe.outputs.need_compose == 'true' && steps.cache-compose.outputs.cache-hit != 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        V="${{ inputs.docker-compose-version }}"
+        ARCH="${{ steps.arch.outputs.arch }}"
+        echo "Downloading docker-compose $V ($ARCH)…"
+        curl -fsSL "https://github.com/docker/compose/releases/download/v${V}/docker-compose-linux-${ARCH}" \
+          -o "docker-compose-${V}-${ARCH}"
+        chmod +x "docker-compose-${V}-${ARCH}"
+
+    - name: Install docker-compose to $HOME/.local/bin
+      if: ${{ steps.probe.outputs.need_compose == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        V="${{ inputs.docker-compose-version }}"
+        ARCH="${{ steps.arch.outputs.arch }}"
+        BIN="$HOME/.local/bin"
+        mkdir -p "$BIN"
+        cp "docker-compose-${V}-${ARCH}" "$BIN/docker-compose"
+        chmod +x "$BIN/docker-compose"
+        echo "$BIN" >> "$GITHUB_PATH"
+
+    # ---- Final verification (hard fail if missing) ----
+    - name: Verify docker and docker-compose on PATH
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "PATH=$PATH"
+        which docker         || { echo "::error::docker not found on PATH"; exit 1; }
+        which docker-compose || { echo "::error::docker-compose not found on PATH"; exit 1; }
+        docker --version
+        docker-compose --version
