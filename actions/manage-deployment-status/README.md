@@ -9,68 +9,68 @@ This action creates GitHub deployment records and manages their status lifecycle
 ### Create deployment and set to in_progress
 
 ```yaml
-      - name: Create deployment
-        id: create
-        uses: twin-digital/appadap/actions/manage-deployment-status@v1
-        with:
-          environment: preview
-          description: 'Preview deployment for PR #${{ github.event.number }}'
-          status: in_progress
+- name: Create deployment
+  id: create
+  uses: twin-digital/appadap/actions/manage-deployment-status@v1
+  with:
+    environment: preview
+    description: 'Preview deployment for PR #${{ github.event.number }}'
+    status: in_progress
 ```
 
 ### Update deployment to success
 
 ```yaml
-      - name: Update deployment to success
-        uses: twin-digital/appadap/actions/manage-deployment-status@v1
-        with:
-          deployment-id: ${{ steps.create.outputs.deployment-id }}
-          environment: preview
-          deployment-url: ${{ steps.deploy.outputs.url }}
-          status: success
+- name: Update deployment to success
+  uses: twin-digital/appadap/actions/manage-deployment-status@v1
+  with:
+    deployment-id: ${{ steps.create.outputs.deployment-id }}
+    environment: preview
+    deployment-url: ${{ steps.deploy.outputs.url }}
+    status: success
 ```
 
 ### Update deployment to failure
 
 ```yaml
-      - name: Update deployment to failure
-        if: failure()
-        uses: twin-digital/appadap/actions/manage-deployment-status@v1
-        with:
-          deployment-id: ${{ steps.create.outputs.deployment-id }}
-          environment: preview
-          status: failure
+- name: Update deployment to failure
+  if: failure()
+  uses: twin-digital/appadap/actions/manage-deployment-status@v1
+  with:
+    deployment-id: ${{ steps.create.outputs.deployment-id }}
+    environment: preview
+    status: failure
 ```
 
 ### Complete deployment workflow
 
 ```yaml
-      - name: Create deployment
-        id: create
-        uses: twin-digital/appadap/actions/manage-deployment-status@v1
-        with:
-          environment: production
-          description: 'Production deployment'
-          status: in_progress
-      
-      # ... perform actual deployment ...
-      
-      - name: Mark deployment successful
-        if: success()
-        uses: twin-digital/appadap/actions/manage-deployment-status@v1
-        with:
-          deployment-id: ${{ steps.create.outputs.deployment-id }}
-          environment: production
-          deployment-url: https://myapp.vercel.app
-          status: success
-      
-      - name: Mark deployment failed
-        if: failure()
-        uses: twin-digital/appadap/actions/manage-deployment-status@v1
-        with:
-          deployment-id: ${{ steps.create.outputs.deployment-id }}
-          environment: production
-          status: failure
+- name: Create deployment
+  id: create
+  uses: twin-digital/appadap/actions/manage-deployment-status@v1
+  with:
+    environment: production
+    description: 'Production deployment'
+    status: in_progress
+
+# ... perform actual deployment ...
+
+- name: Mark deployment successful
+  if: success()
+  uses: twin-digital/appadap/actions/manage-deployment-status@v1
+  with:
+    deployment-id: ${{ steps.create.outputs.deployment-id }}
+    environment: production
+    deployment-url: https://myapp.vercel.app
+    status: success
+
+- name: Mark deployment failed
+  if: failure()
+  uses: twin-digital/appadap/actions/manage-deployment-status@v1
+  with:
+    deployment-id: ${{ steps.create.outputs.deployment-id }}
+    environment: production
+    status: failure
 ```
 
 ## Prerequisites
@@ -118,6 +118,7 @@ Deployment environment name. Must be exactly one of: `Preview`, `Staging`, or `P
 GitHub token for API access. The default `GITHUB_TOKEN` is usually sufficient, but you may need a custom token with specific permissions.
 
 **Required permissions:**
+
 - `deployments: write` - Create and update deployment records
 - `statuses: write` - Update deployment statuses
 
@@ -140,17 +141,20 @@ GitHub deployment ID for the created or updated deployment. Use this to update t
 ## Event Compatibility
 
 ### Works with:
+
 - `push` events
 - `pull_request` events from the same repository
 - `workflow_dispatch` events
 - Any event where `GITHUB_TOKEN` has deployment permissions
 
 ### Does NOT work with:
+
 - **Pull requests from forked repositories** - The action automatically skips execution with a warning. Forks don't have access to secrets or deployment permissions for security reasons.
 
 ## GitHub UI Integration
 
 Deployments created by this action appear in:
+
 - Repository's **Environments** tab (if environment protection rules are configured)
 - Repository's **Deployments** section in the right sidebar
 - Pull request timeline (for PR-related deployments)

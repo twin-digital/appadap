@@ -7,10 +7,18 @@
     "changeset": "changeset",
     "changeset:publish": "changeset publish",
     "changeset:status": "changeset status",
-    "changeset:version": "changeset version"
+    "changeset:version": "changeset version",
+    "lint": "pnpm lint:prettier && pnpm lint:packagejson",
+    "lint:fix": "pnpm lint:fix:prettier && pnpm lint:fix:packagejson",
+    "lint:fix:packagejson": "prettier-package-json --write ./package.json",
+    "lint:fix:prettier": "prettier --write .",
+    "lint:packagejson": "prettier-package-json --list-different",
+    "lint:prettier": "prettier --check ."
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.7"
+    "@changesets/cli": "^2.29.7",
+    "prettier": "^3.6.2",
+    "prettier-package-json": "^2.8.0"
   },
   "engines": {
     "node": ">=22",

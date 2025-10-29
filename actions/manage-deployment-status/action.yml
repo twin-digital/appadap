@@ -73,12 +73,13 @@ runs:
           }
 
           const deployment = await github.rest.repos.createDeployment({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            ref: deploymentRef,
-            environment: '${{ inputs.environment }}',
+            auto_merge: false,
             description: '${{ inputs.description }}',
-            auto_merge: false
+            environment: '${{ inputs.environment }}',
+            owner: context.repo.owner,
+            ref: deploymentRef,
+            repo: context.repo.repo,
+            required_contexts: []
           });
 
           core.setOutput('deployment-id', deployment.data.id);

@@ -42,6 +42,10 @@ The `appadap` library provides the following reusable GitHub Actions:
 - [install-docker](./actions/install-docker/README.md): installs `docker` and `docker-compose` CLI tools
 - [install-playwright](./actions/install-playwright/README.md): installs `playwright` browsers and system dependencies
 
+Additionally, it provides opinionated workflows which can provide reuse at a higher-level
+
+- [CI](./.github/workflows/ci.yaml): comprehensive CI workflow for validating and building a project
+
 ## Developing `appadap`
 
 ```bash

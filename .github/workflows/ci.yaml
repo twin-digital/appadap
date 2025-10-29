@@ -1,30 +1,30 @@
-name: CI
+name: Build and Validate
 
 on:
-  # every git push (to any branch)
-  push:
-    branches:
-      - main
-    # do not run CI for documentation-only changes
-    paths-ignore:
-      - 'ai/**'
-      - 'docs/**'
-      - '**/*.md'
-      - '!.changeset/*.md'
-  # pull‐request events *against* main, for the "merge-commit" build
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - reopened
-      - synchronize
-    # do not run CI for documentation-only changes
-    paths-ignore:
-      - 'ai/**'
-      - 'docs/**'
-      - '**/*.md'
-      - '!.changeset/*.md'
+  workflow_call:
+    inputs:
+      validate_scripts:
+        default: 'lint,test'
+        description: 'Comma-delimited list of npm scripts to run for validation'
+        type: string
+      build_type:
+        default: 'auto'
+        description: "Build type: 'auto' (default), 'vercel', 'nextjs', 'skip'"
+        type: string
+      e2e_script:
+        default: 'test:e2e'
+        type: string
+      run_e2e:
+        default: 'auto'
+        description: "'true' | 'false' | 'auto' (default)"
+        type: string
+    secrets:
+      VERCEL_TOKEN:
+        required: false
+        description: "Required for 'vercel' build type"
+
+permissions:
+  contents: read
 
 env:
   CI: 1
@@ -32,16 +32,307 @@ env:
   PLAYWRIGHT_BROWSERS_PATH: .playwright-browsers
   VERCEL_TELEMETRY_DISABLED: 1
 
-permissions:
-  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint-build-test:
+  # Detect build type if set to 'auto'
+  detect_build_type:
     runs-on: ubuntu-latest
+    outputs:
+      build_type: ${{ steps.detect.outputs.build_type }}
     steps:
-      # fetch code
+      - uses: actions/checkout@v4
+
+      - id: detect
+        shell: bash
+        run: |
+          build_type="${{ inputs.build_type }}"
+
+          # If not auto, use the specified value
+          if [[ "$build_type" != "auto" ]]; then
+            echo "build_type=$build_type" >> $GITHUB_OUTPUT
+            echo "Using specified build type: $build_type"
+            exit 0
+          fi
+
+          # Auto-detect based on project files
+          detected="skip"
+
+          if [[ -f "vercel.json" ]] || [[ -d ".vercel" ]]; then
+            detected="vercel"
+          elif [[ -f "next.config.js" ]] || [[ -f "next.config.ts" ]] || [[ -f "next.config.mjs" ]]; then
+            detected="nextjs"
+          fi
+
+          echo "build_type=$detected" >> $GITHUB_OUTPUT
+          echo "Auto-detected build type: $detected"
+
+  # Parse validate_scripts into a JSON array for the matrix
+  prepare_validation:
+    runs-on: ubuntu-latest
+    outputs:
+      scripts: ${{ steps.parse.outputs.scripts }}
+    steps:
+      - id: parse
+        shell: bash
+        run: |
+          # Convert comma-delimited string to JSON array
+          scripts="${{ inputs.validate_scripts }}"
+
+          # Use bash to split and create JSON array
+          IFS=',' read -ra SCRIPTS <<< "$scripts"
+          json_array="["
+          for i in "${!SCRIPTS[@]}"; do
+            # Trim whitespace
+            script=$(echo "${SCRIPTS[$i]}" | xargs)
+            if [ $i -gt 0 ]; then
+              json_array+=","
+            fi
+            json_array+="\"$script\""
+          done
+          json_array+="]"
+
+          echo "scripts=$json_array" >> $GITHUB_OUTPUT
+          echo "Parsed validation scripts: $json_array"
+
+  validate:
+    needs: [prepare_validation]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        script: ${{ fromJson(needs.prepare_validation.outputs.scripts) }}
+    steps:
       - uses: actions/checkout@v4
 
       # install node, pnpm, and package dependencies
       - name: Setup pnpm and install dependencies
         uses: ./actions/install-dependencies
+
+      # perform validation step
+      - name: Run ${{ matrix.script }}
+        run: pnpm run "${{ matrix.script }}"
+
+  build:
+    needs: [detect_build_type]
+    runs-on: ubuntu-latest
+    # Skip the build job entirely if build_type is 'skip'
+    if: needs.detect_build_type.outputs.build_type != 'skip'
+    steps:
+      - uses: actions/checkout@v4
+
+      # install node, pnpm, and package dependencies
+      - name: Setup pnpm and install dependencies
+        uses: ./actions/install-dependencies
+
+      # Validate required secrets for build type
+      - name: Validate required secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          build_type="${{ needs.detect_build_type.outputs.build_type }}"
+
+          echo "Validating secrets for build type: $build_type"
+
+          case "$build_type" in
+            vercel)
+              if [[ -z "$VERCEL_TOKEN" ]]; then
+                echo "::error::Build type 'vercel' requires VERCEL_TOKEN secret to be configured"
+                exit 1
+              fi
+              echo "✅ VERCEL_TOKEN is configured"
+              ;;
+              
+            nextjs|skip)
+              echo "✅ No secrets required for build type: $build_type"
+              ;;
+              
+            *)
+              echo "::error::Unknown build type: $build_type"
+              exit 1
+              ;;
+          esac
+
+      # Build based on detected type using inline script
+      - name: Build application
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          build_type="${{ needs.detect_build_type.outputs.build_type }}"
+          is_production="${{ github.ref == 'refs/heads/main' }}"
+
+          echo "Building with type: $build_type (production: $is_production)"
+          mkdir -p .out
+
+          case "$build_type" in
+            vercel)
+              if [[ "$is_production" == "true" ]]; then
+                npx vercel build --prod --yes --token "$VERCEL_TOKEN"
+              else
+                npx vercel build --yes --token "$VERCEL_TOKEN"
+              fi
+              tar -czf .out/build-output.tgz .next
+              ;;
+              
+            nextjs)
+              pnpm run build
+              tar -czf .out/build-output.tgz .next
+              ;;
+              
+            skip)
+              echo "Build type is 'skip', nothing to build"
+              exit 0
+              ;;
+              
+            *)
+              echo "::error::Unknown build type: $build_type"
+              exit 1
+              ;;
+          esac
+
+          echo "✅ Build completed successfully"
+
+      # Upload build artifacts
+      - name: Upload build output
+        uses: actions/upload-artifact@v5
+        with:
+          if-no-files-found: error
+          include-hidden-files: true
+          name: build-output
+          path: |
+            .out/build-output.tgz
+            .vercel/
+            !.vercel/.env.*
+          retention-days: 30
+
+  # evaluate "auto-detect" inputs:
+  #  - Set run_e2e if 'auto' and project has an package.json script named {{ e2e_script }}
+  prepare_e2e:
+    runs-on: ubuntu-latest
+    outputs:
+      run_e2e: ${{ steps.decide.outputs.run_e2e_final }}
+      e2e_script: ${{ steps.script.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: script
+        run: echo "name=${{ inputs.e2e_script }}" >> $GITHUB_OUTPUT
+
+      # Autodetect by presence of the script key in package.json
+      - id: detect
+        shell: bash
+        run: |
+          script="${{ steps.script.outputs.name }}"
+          if [[ -f package.json ]]; then
+            has_script=$(jq -r --arg n "$script" '.scripts[$n] != null' package.json)
+          else
+            has_script=false
+          fi
+          echo "auto_e2e=$has_script" >> $GITHUB_OUTPUT
+
+      # Decide: input > repo/org var > autodetect > false
+      - id: decide
+        shell: bash
+        run: |
+          norm(){ case "$1" in true|false) echo "$1";; auto) echo "auto";; *) echo "";; esac; }
+
+          in=$(norm "${{ inputs.run_e2e }}")
+          var=$(norm "${{ vars.RUN_E2E }}")
+          auto="${{ steps.detect.outputs.auto_e2e }}"
+
+          final=""
+          if   [[ -n "$in" && "$in" != "auto" ]]; then final="$in"
+          elif [[ -n "$var" ]];                  then final="$var"
+          elif [[ "$in" == "auto" || -z "$in" ]]; then final="$auto"
+          fi
+          [[ -z "$final" ]] && final="false"
+
+          echo "run_e2e_final=$final" >> $GITHUB_OUTPUT
+          echo "Decision: run_e2e=$final"
+
+  e2e:
+    needs: [prepare_e2e, validate, detect_build_type, build]
+    runs-on: ubuntu-latest
+    # Run if E2E is enabled; build job might be skipped but that's OK
+    if: |
+      needs.prepare_e2e.outputs.run_e2e == 'true' &&
+      !cancelled()
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail-fast if someone forced E2E but the script doesn't exist
+      - name: Validate E2E script exists
+        shell: bash
+        env:
+          SCRIPT_NAME: ${{ needs.prepare_e2e.outputs.e2e_script }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f package.json ]]; then
+            echo "::error::package.json not found at repo root; cannot run E2E script \"$SCRIPT_NAME\""
+            exit 2
+          fi
+
+          # jq -e exits non-zero if the result is null/false
+          if ! jq -e --arg n "$SCRIPT_NAME" '.scripts and .scripts[$n]' package.json > /dev/null; then
+            echo "::error::Expected npm script \"$SCRIPT_NAME\" in package.json but it was not found"
+            exit 2
+          fi
+
+          echo "✅ Found npm script \"$SCRIPT_NAME\""
+
+      # install tools and package dependencies
+      - name: Setup pnpm and install dependencies
+        uses: ./actions/install-dependencies@v0
+      - name: Install Playwright
+        uses: ./actions/install-playwright@v0
+      - name: Install Docker CLI
+        uses: ./actions/actions/install-docker@v0
+
+      # Download and restore build artifacts based on build type
+      - name: Download build output
+        if: needs.detect_build_type.outputs.build_type != 'skip'
+        uses: actions/download-artifact@v5
+        with:
+          name: build-output
+
+      - name: Restore build output
+        if: needs.detect_build_type.outputs.build_type != 'skip'
+        run: |
+          set -euo pipefail
+
+          build_type="${{ needs.detect_build_type.outputs.build_type }}"
+
+          echo "Restoring build artifacts for type: $build_type"
+
+          case "$build_type" in
+            vercel|nextjs)
+              rm -rf .next
+              tar -xzvf .out/build-output.tgz
+              echo "✅ Restored .next directory"
+              ;;
+              
+            skip)
+              echo "No build artifacts to restore (build_type: skip)"
+              ;;
+              
+            *)
+              echo "::error::Unknown build type: $build_type"
+              exit 1
+              ;;
+          esac
+
+      # invoke E2E tests and upload results as an artifact
+      - name: Run E2E
+        run: pnpm run "${{ needs.prepare_e2e.outputs.e2e_script }}"
+      - uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: .out/test-results/
+          retention-days: 30

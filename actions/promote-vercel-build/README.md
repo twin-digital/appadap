@@ -9,33 +9,33 @@ This is an opinionated action for promoting Vercel deployments to production. It
 ### Basic usage
 
 ```yaml
-      - uses: twin-digital/appadap/actions/promote-vercel-build@v1
-        with:
-          vercel-project-id: ${{ vars.VERCEL_PROJECT_ID }}
-          vercel-team-slug: ${{ vars.VERCEL_TEAM_SLUG }}
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+- uses: twin-digital/appadap/actions/promote-vercel-build@v1
+  with:
+    vercel-project-id: ${{ vars.VERCEL_PROJECT_ID }}
+    vercel-team-slug: ${{ vars.VERCEL_TEAM_SLUG }}
+    vercel-token: ${{ secrets.VERCEL_TOKEN }}
 ```
 
 ### Promote specific commit
 
 ```yaml
-      - uses: twin-digital/appadap/actions/promote-vercel-build@v1
-        with:
-          ref: 'abc1234567890abcdef1234567890abcdef123456'
-          vercel-project-id: ${{ vars.VERCEL_PROJECT_ID }}
-          vercel-team-slug: ${{ vars.VERCEL_TEAM_SLUG }}
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+- uses: twin-digital/appadap/actions/promote-vercel-build@v1
+  with:
+    ref: 'abc1234567890abcdef1234567890abcdef123456'
+    vercel-project-id: ${{ vars.VERCEL_PROJECT_ID }}
+    vercel-team-slug: ${{ vars.VERCEL_TEAM_SLUG }}
+    vercel-token: ${{ secrets.VERCEL_TOKEN }}
 ```
 
 ### Promote tagged release
 
 ```yaml
-      - uses: twin-digital/appadap/actions/promote-vercel-build@v1
-        with:
-          ref: 'v1.2.3'
-          vercel-project-id: ${{ vars.VERCEL_PROJECT_ID }}
-          vercel-team-slug: ${{ vars.VERCEL_TEAM_SLUG }}
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+- uses: twin-digital/appadap/actions/promote-vercel-build@v1
+  with:
+    ref: 'v1.2.3'
+    vercel-project-id: ${{ vars.VERCEL_PROJECT_ID }}
+    vercel-team-slug: ${{ vars.VERCEL_TEAM_SLUG }}
+    vercel-token: ${{ secrets.VERCEL_TOKEN }}
 ```
 
 ## Prerequisites
@@ -88,7 +88,7 @@ Vercel scope (team or personal) passed to the CLI as --scope.
 
 **Required:** Yes
 
-Vercel API token for authenticating with Vercel's API. This should be team-scoped and least-privileged (only promotion 
+Vercel API token for authenticating with Vercel's API. This should be team-scoped and least-privileged (only promotion
 is needed). To ensure the value is masked in any logs, it is recommended to pass this from a secret value.
 
 ## Outputs

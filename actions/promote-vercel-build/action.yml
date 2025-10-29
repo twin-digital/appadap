@@ -44,7 +44,7 @@ runs:
       run: |
         set -euo pipefail
         echo "::add-mask::${{ inputs.vercel-token }}"
-        
+
         [[ "${{ inputs.debug }}" == "true" ]] && echo "Finding deployment to promote..."
 
         REF="${{ inputs.ref }}"

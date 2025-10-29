@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  # every git push (to any branch)
+  push:
+    branches:
+      - main
+    # do not run CI for documentation-only changes
+    paths-ignore:
+      - 'ai/**'
+      - 'docs/**'
+      - '**/*.md'
+      - '!.changeset/*.md'
+  # pull‐request events *against* main, for the "merge-commit" build
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+    # do not run CI for documentation-only changes
+    paths-ignore:
+      - 'ai/**'
+      - 'docs/**'
+      - '**/*.md'
+      - '!.changeset/*.md'
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yaml
+    secrets: inherit
+    with:
+      validate_scripts: 'lint'
+      build_type: 'skip'
+      run_e2e: 'false'

@@ -1,0 +1,11 @@
+# ignore HTML test fixtures, which are arbitrary downloaded HTML pages
+**/__test__/*.html
+**/__test__/**/*.html
+terraform
+
+# auto-generated files
+.changeset/*.md
+!.changeset/README.md
+.vercel
+CHANGELOG.md
+pnpm-lock.yaml

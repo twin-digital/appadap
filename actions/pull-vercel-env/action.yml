@@ -49,10 +49,10 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        
+
         # Set restrictive umask to prevent world-readable secrets
         umask 077
-        
+
         echo "Pulling environment variables from Vercel (${{ inputs.environment }} environment)..."
         echo "Output file: ${{ inputs.file }}"
 
