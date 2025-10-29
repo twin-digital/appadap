@@ -25,6 +25,18 @@ on:
       - 'docs/**'
       - '**/*.md'
       - '!.changeset/*.md'
+  workflow_call:
+    inputs:
+      e2e_script:
+        default: 'test:e2e'
+        type: string
+      run_e2e:
+        default: 'auto'
+        description: "'true' | 'false' | 'auto' (default)"
+        type: string
+
+permissions:
+  contents: read
 
 env:
   CI: 1
@@ -32,16 +44,153 @@ env:
   PLAYWRIGHT_BROWSERS_PATH: .playwright-browsers
   VERCEL_TELEMETRY_DISABLED: 1
 
-permissions:
-  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint-build-test:
+  lint_build_test:
     runs-on: ubuntu-latest
     steps:
-      # fetch code
       - uses: actions/checkout@v4
 
       # install node, pnpm, and package dependencies
       - name: Setup pnpm and install dependencies
         uses: ./actions/install-dependencies
+
+      # perform validation steps
+      - run: pnpm run db:generate-client
+      - run: pnpm run lint
+      - run: pnpm run test
+
+      # build production or preview app build, based on git ref
+      - name: Vercel production build
+        if: github.ref == 'refs/heads/main'
+        run: |
+          npx vercel build --prod --yes --token "${VERCEL_TOKEN}"
+          mkdir -p .out
+          tar -czf .out/next-build.tgz .next
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - name: Vercel preview build
+        if: github.ref != 'refs/heads/main'
+        run: |
+          npx vercel build --yes --token "${VERCEL_TOKEN}"
+          mkdir -p .out
+          tar -czf .out/next-build.tgz .next
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      # upload build result as an artifact
+      - name: Upload Vercel build output
+        uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: error
+          include-hidden-files: true
+          name: vercel-build-output
+          path: |
+            .out/next-build.tgz
+            .vercel/
+            !.vercel/.env.*
+          retention-days: 30
+
+  # evaluate "auto-detect" inputs:
+  #  - Set run_e2e if 'auto' and project has an package.json script named {{ e2e_script }}
+  evaluate:
+    runs-on: ubuntu-latest
+    outputs:
+      run_e2e: ${{ steps.decide.outputs.run_e2e_final }}
+      e2e_script: ${{ steps.script.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: script
+        run: echo "name=${{ inputs.e2e_script }}" >> $GITHUB_OUTPUT
+
+      # Autodetect by presence of the script key in package.json
+      - id: detect
+        shell: bash
+        run: |
+          script="${{ steps.script.outputs.name }}"
+          if [[ -f package.json ]]; then
+            has_script=$(jq -r --arg n "$script" '.scripts[$n] != null' package.json)
+          else
+            has_script=false
+          fi
+          echo "auto_e2e=$has_script" >> $GITHUB_OUTPUT
+
+      # Decide: input > repo/org var > autodetect > false
+      - id: decide
+        shell: bash
+        run: |
+          norm(){ case "$1" in true|false) echo "$1";; auto) echo "auto";; *) echo "";; esac; }
+
+          in=$(norm "${{ inputs.run_e2e }}")
+          var=$(norm "${{ vars.RUN_E2E }}")
+          auto="${{ steps.detect.outputs.auto_e2e }}"
+
+          final=""
+          if   [[ -n "$in" && "$in" != "auto" ]]; then final="$in"
+          elif [[ -n "$var" ]];                  then final="$var"
+          elif [[ "$in" == "auto" || -z "$in" ]]; then final="$auto"
+          fi
+          [[ -z "$final" ]] && final="false"
+
+          echo "run_e2e_final=$final" >> $GITHUB_OUTPUT
+          echo "Decision: run_e2e=$final"
+
+  e2e:
+    needs: [evaluate, lint_build_test]
+    runs-on: ubuntu-latest
+    if: needs.evaluate.outputs.run_e2e == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail-fast if someone forced E2E but the script doesn't exist
+      - name: Validate E2E script exists
+        shell: bash
+        env:
+          SCRIPT_NAME: ${{ needs.evaluate.outputs.e2e_script }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f package.json ]]; then
+            echo "::error::package.json not found at repo root; cannot run E2E script \"$SCRIPT_NAME\""
+            exit 2
+          fi
+
+          # jq -e exits non-zero if the result is null/false
+          if ! jq -e --arg n "$SCRIPT_NAME" '.scripts and .scripts[$n]' package.json > /dev/null; then
+            echo "::error::Expected npm script \"$SCRIPT_NAME\" in package.json but it was not found"
+            exit 2
+          fi
+
+          echo "✅ Found npm script \"$SCRIPT_NAME\""
+
+      # install tools and package dependencies
+      - name: Setup pnpm and install dependencies
+        uses: twin-digital/appadap/actions/install-dependencies@v0
+      - name: Install Playwright
+        uses: twin-digital/appadap/actions/install-playwright@v0
+      - name: Install Docker CLI
+        uses: twin-digital/appadap/actions/install-docker@v0
+
+      # download build artifact from CI job
+      - name: Download Vercel build output
+        uses: actions/download-artifact@v5
+        with:
+          name: vercel-build-output
+      - name: Unpack next.js build
+        run: |
+          rm -rf .next
+          tar -xzvf .out/next-build.tgz
+
+      # invoke E2E tests and upload results as an artifact
+      - name: Run E2E
+        run: pnpm run "${{ needs.evaluate.outputs.e2e_script }}"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: .out/test-results/
+          retention-days: 30

@@ -34,7 +34,7 @@ The workflow includes intelligent auto-detection for E2E test execution based on
 
 - **`.nvmrc` file** - Your project must include an `.nvmrc` file at the repository root to specify the Node.js version
 - **E2E test infrastructure** - E2E tests are expected to spin up their own infrastructure and application instance (e.g., using Docker Compose). There is no separate deployment step before running E2E tests.
-- **Build artifacts** - The E2E job expects a `vercel-build-output` artifact containing a `next-build.tgz` file (automatically created by the `lint-build-test` job)
+- **Build artifacts** - The E2E job expects a `vercel-build-output` artifact containing a `next-build.tgz` file (automatically created by the `lint_build_test` job)
 
 ### Usage Example
 
@@ -60,10 +60,10 @@ jobs:
 The workflow consists of three jobs:
 
 1. **`evaluate`** - Determines whether E2E tests should run based on inputs and auto-detection
-2. **`lint-build-test`** - Runs linting, building, and unit tests; creates build artifacts
-3. **`e2e_gate`** - Conditionally runs E2E tests if enabled, installs Playwright and Docker, and uploads test results
+2. **`lint_build_test`** - Runs linting, building, and unit tests; creates build artifacts
+3. **`e2e`** - Conditionally runs E2E tests if enabled, installs Playwright and Docker, and uploads test results
 
 ### Artifacts
 
 - **`vercel-build-output`** - Next.js build output (created by `lint-build-test` job)
-- **`playwright-report`** - E2E test results and Playwright reports (created by `e2e_gate` job, retained for 30 days)
+- **`playwright-report`** - E2E test results and Playwright reports (created by `e2e` job, retained for 30 days)
