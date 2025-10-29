@@ -69,11 +69,40 @@ jobs:
           echo "build_type=$detected" >> $GITHUB_OUTPUT
           echo "Auto-detected build type: $detected"
 
+  # Parse validate_scripts into a JSON array for the matrix
+  prepare_validation:
+    runs-on: ubuntu-latest
+    outputs:
+      scripts: ${{ steps.parse.outputs.scripts }}
+    steps:
+      - id: parse
+        shell: bash
+        run: |
+          # Convert comma-delimited string to JSON array
+          scripts="${{ inputs.validate_scripts }}"
+
+          # Use bash to split and create JSON array
+          IFS=',' read -ra SCRIPTS <<< "$scripts"
+          json_array="["
+          for i in "${!SCRIPTS[@]}"; do
+            # Trim whitespace
+            script=$(echo "${SCRIPTS[$i]}" | xargs)
+            if [ $i -gt 0 ]; then
+              json_array+=","
+            fi
+            json_array+="\"$script\""
+          done
+          json_array+="]"
+
+          echo "scripts=$json_array" >> $GITHUB_OUTPUT
+          echo "Parsed validation scripts: $json_array"
+
   validate:
+    needs: [prepare_validation]
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        script: ${{ fromJson(format('["{0}"]', join(split(inputs.validate_scripts, ','), '","'))) }}
+        script: ${{ fromJson(needs.prepare_validation.outputs.scripts) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -170,7 +199,7 @@ jobs:
 
       # Upload build artifacts
       - name: Upload build output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           if-no-files-found: error
           include-hidden-files: true
@@ -259,11 +288,11 @@ jobs:
 
       # install tools and package dependencies
       - name: Setup pnpm and install dependencies
-        uses: twin-digital/appadap/actions/install-dependencies@v0
+        uses: ./actions/install-dependencies@v0
       - name: Install Playwright
-        uses: twin-digital/appadap/actions/install-playwright@v0
+        uses: ./actions/install-playwright@v0
       - name: Install Docker CLI
-        uses: twin-digital/appadap/actions/install-docker@v0
+        uses: ./actions/actions/install-docker@v0
 
       # Download and restore build artifacts based on build type
       - name: Download build output
@@ -301,7 +330,7 @@ jobs:
       # invoke E2E tests and upload results as an artifact
       - name: Run E2E
         run: pnpm run "${{ needs.evaluate.outputs.e2e_script }}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
